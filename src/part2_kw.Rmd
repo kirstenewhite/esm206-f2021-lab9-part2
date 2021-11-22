@@ -1,0 +1,76 @@
+---
+title: "ESM206_Lab9"
+author: "Kirsten White"
+date: "11/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(janitor)
+library(here)
+library(broom) 
+
+```
+
+## Read in the data
+```{r}
+lizards <- read_csv(here("data", "lizards.csv"))
+```
+## Get counts of lizards by species
+```{r}
+# Find counts by species 
+
+lizards %>%
+  count(spp) %>%
+  arrange(-n) # arrange in decreasing order by the variable n that contains the counts; shows counts of each lizard species and how many times they appear in the data sets; we see that UTST is the most common (will continue on with this)
+```
+## Make a subset 
+- Contain only: USTS lizards, observations with 3 highest observed populations (IBPE - grassland, RABB - rabbit mesquite, and EAST - east tarbush site), and where tail condition is recorded (w = whole or b = broken)
+
+```{r}
+utst <- lizards %>%
+  filter(spp == "UTST") %>%
+  filter(site %in% c("IBPE", "RABB", "EAST")) %>% # look for any match within this vector; check with unique(utst$site) in console
+  filter(tail %in% c("B", "W")) # excludes missing values or n/a values
+```
+
+## Now, let's find counts and proportions of lizards with broken or whole tails at each site 
+```{r}
+utst %>%
+  count(site, tail)
+```
+
+```{r}
+tail_counts <- utst %>%
+  janitor::tabyl(site, tail) # returns the same info but instead of long format, it is in a contingency table with counts at each intersection (good for chi squared) 
+
+tail_proportions <- tail_counts %>%
+  adorn_percentages() %>% # this is from the janitor package (janitor::adorn_percentages()); shows percentage of lizards at each site 
+  adorn_pct_formatting((digits = 2)) %>% # rounds percentages to 2 digits
+  adorn_ns() # includes actual counts along with the percentages; helpful to include when reporting contingency table info 
+```
+column to row names so that all we are left with is the contingency tabels with counts of tails for each site
+
+## convert to contingency table 
+```{r}
+# use `column_to_rowname()` to do this
+
+lizard_ct <- tail_counts %>%
+  column_to_rownames(var = "site") # remove this as a variable; remove the column and have site names listed as row name info (not as their own variable anymore)
+```
+
+
+### Chi-square
+- Asking, are tail breakage and site truly independent (site has no impact on tail breakage; if the case, we would expect to see similar counts/proportions of each tail break type between sites)
+- running the test is easy!
+```{r}
+lizard_x2 <- chisq.test(lizard_ct) # give it entire contingency table 
+lizard_x2
+
+lizard_tidy <- broom::tidy(lizard_x2) # writes out the info in tidy format and allows us to refer to the values in in-line referencing
+```
+- is that probability (p val = 0.001456), yes we have sufficient evidence to reject the null and retain the alternative hyp that site and tail breakage are NOT independent; there is a significant association between site and tail breakage; site and lizard tail breakage are not independent
+- There is a significant association (non-independence) between site and lizard tail breakage ($chi$^2^(`r lizard_tidy$parameter`) = `r lizard_tidy$statistic`, *p* = `r lizard_tidy$p.value`)
